@@ -68,7 +68,19 @@ static inline int ob_color(OBJECTS *ob)
 
 void swputsym(int x, int y, OBJECTS *ob)
 {
-	Vid_DispSymbol(x, y, ob->ob_symbol, ob_color(ob));
+	if (ob->ob_type == WALKER) {
+		Vid_DispSymbolOpaque(x, y, ob->ob_symbol, ob_color(ob));
+	} else if (ob->ob_type == CAR && ob->ob_orient) {
+		Vid_DispSymbolFlipped(x, y, ob->ob_symbol, ob_color(ob));
+	} else if (ob->ob_type == TARGET &&
+	           ob->ob_orient == TARGET_TANK && ob->ob_angle) {
+		Vid_DispSymbolFlipped(x, y, ob->ob_symbol, ob_color(ob));
+	} else if (ob->ob_type == BOMB &&
+	           ob->ob_movef == move_tank_shell && ob->ob_orient) {
+		Vid_DispSymbolFlipped(x, y, ob->ob_symbol, ob_color(ob));
+	} else {
+		Vid_DispSymbol(x, y, ob->ob_symbol, ob_color(ob));
+	}
 }
 
 static void PrintHelp(void)
@@ -168,6 +180,12 @@ void swdisp(void)
 	for (ob = objtop; ob; ob = ob->ob_next) {
 		int x, y;
 
+		// Pilots are drawn in a final opaque pass below so that scenery
+		// and XOR-drawn objects cannot alter their colors.
+		if (ob->ob_type == WALKER) {
+			continue;
+		}
+
 		x = ob->ob_x;
 		y = ob->ob_y;
 
@@ -182,6 +200,17 @@ void swdisp(void)
 	}
 
 	swground(ground + displx, 0, SCR_WDTH, GROUND_RENDER_PREF);
+
+	for (ob = objtop; ob; ob = ob->ob_next) {
+		if (ob->ob_type == WALKER && ob->ob_drwflg &&
+		    in_range(displx - ob->ob_symbol->w, ob->ob_x,
+		             displx + SCR_WDTH - 1)) {
+			swputsym(ob->ob_x - displx, ob->ob_y, ob);
+			if (ob->ob_soundf) {
+				(*(ob->ob_soundf))(ob);
+			}
+		}
+	}
 
 	if (Timer_GetMS() - notification_time < NOTIFICATION_TIME_MS) {
 		swposcur(0, 0);

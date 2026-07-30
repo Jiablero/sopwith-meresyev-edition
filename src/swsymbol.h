@@ -56,6 +56,8 @@ extern symset_t symbol_ribbon[6];                            // swribbonsym
 extern symset_t symbol_balloon[6];                           // swballoonsym
 extern symset_t symbol_powerups[NUM_POWERUP_TYPES];          // swpowerupsym
 extern symset_t symbol_powerup_collected[NUM_POWERUP_TYPES]; // swpowercollsym
+extern symset_t symbol_walker[3];                             // swwalkersym
+extern symset_t symbol_grenade[1];                            // swgrenadesym
 
 extern sopsym_t symbol_pixel;
 

@@ -52,6 +52,15 @@ void endgame(faction_t winning_faction)
 {
 	OBJECTS *ob;
 
+	if (playmode == PLAYMODE_BATTLEFIELD) {
+		if (consoleplayer->ob_faction == winning_faction) {
+			winner(consoleplayer);
+		} else {
+			loser(consoleplayer);
+		}
+		return;
+	}
+
 	ob = objtop;
 	while (ob->ob_type == PLANE) {
 		if (ob->ob_endsts == PLAYING) {

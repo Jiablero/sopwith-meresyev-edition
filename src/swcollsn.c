@@ -28,6 +28,60 @@ static void tstcrash(OBJECTS *obp);
 static OBJECTS *killed[MAX_OBJS * 2], *killer[MAX_OBJS * 2];
 static int killptr;
 
+static bool CollisionAlreadyQueued(OBJECTS *ob1, OBJECTS *ob2)
+{
+	int i;
+
+	for (i = 0; i + 1 < killptr; i += 2) {
+		if ((killed[i] == ob1 && killer[i] == ob2) ||
+		    (killed[i] == ob2 && killer[i] == ob1)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static void QueueSweptWalkerHit(OBJECTS *shot)
+{
+	OBJECTS *walker, *best = NULL;
+	int old_x = shot->ob_x - shot->ob_dx;
+	int min_x = imin(old_x, shot->ob_x);
+	int max_x = imax(old_x, shot->ob_x);
+	int best_distance = 999999;
+
+	for (walker = objtop; walker != NULL; walker = walker->ob_next) {
+		int distance;
+		int walker_ymin;
+
+		if (walker->ob_type != WALKER ||
+		    walker->ob_state != WALKER_ABANDONED ||
+		    walker == shot->ob_owner) {
+			continue;
+		}
+		if (max_x < walker->ob_x ||
+		    min_x > walker->ob_x + walker->ob_symbol->w - 1) {
+			continue;
+		}
+		walker_ymin = walker->ob_y - walker->ob_symbol->h + 1;
+		if (!in_range(walker_ymin, shot->ob_y, walker->ob_y)) {
+			continue;
+		}
+		distance = abs(walker->ob_x - old_x);
+		if (distance < best_distance) {
+			best = walker;
+			best_distance = distance;
+		}
+	}
+
+	if (best != NULL && !CollisionAlreadyQueued(shot, best) &&
+	    killptr < 2 * MAX_OBJS - 1) {
+		killed[killptr] = shot;
+		killer[killptr++] = best;
+		killed[killptr] = best;
+		killer[killptr++] = shot;
+	}
+}
+
 static int collsdx[MAX_PLYR];
 static int collsdy[MAX_PLYR];
 static OBJECTS *collsno[MAX_PLYR];
@@ -45,6 +99,8 @@ bool CollisionTest(OBJECTS *ob1, OBJECTS *ob2)
 
 	if ((ob1->ob_type == PLANE && ob1->ob_state >= FINISHED) ||
 	    (ob2->ob_type == PLANE && ob2->ob_state >= FINISHED) ||
+	    (ob1->ob_type == PLANE && ob1->ob_control_delay > 0) ||
+	    (ob2->ob_type == PLANE && ob2->ob_control_delay > 0) ||
 	    (ob1->ob_type == EXPLOSION && ob2->ob_type == EXPLOSION)) {
 		return false;
 	}
@@ -172,7 +228,8 @@ static faction_t CheckForWinner(void)
 
 	for (i = FACTION_PLAYER1; i < NUM_FACTIONS; i++) {
 		// Computer planes can't win.
-		if (!IsHumanFaction(i)) {
+		if (playmode != PLAYMODE_BATTLEFIELD &&
+		    !IsHumanFaction(i)) {
 			continue;
 		}
 
@@ -195,14 +252,22 @@ static void TargetDestroyed(OBJECTS *ob, obtype_t type)
 	int reverse;
 	OBJECTS *so = GetScoreObject(ob, &reverse);
 
-	if (!reverse && (type == BOMB || type == SHOT || type == MISSILE ||
-	                 type == PLANE)) {
+	if (!reverse &&
+	    (type == BOMB || type == GRENADE || type == SHOT ||
+	     type == MISSILE || type == PLANE)) {
 		so->ob_flightscore.killscore += 4;
 		so->ob_flightscore.valour += 3 * ComputeValour(ob);
 	}
 
 	scoretarg(ob, ob->ob_orient == TARGET_OIL_TANK ? 200 : 100);
 
+	// Battlefield tanks use TARGET sprites and collision rules, but they
+	// are units rather than territory.
+	if (playmode == PLAYMODE_BATTLEFIELD &&
+	    ob->ob_orient == TARGET_TANK &&
+	    ob->ob_original_ob->orient != TARGET_TANK) {
+		return;
+	}
 	--numtarg[ob->ob_faction];
 	winner = CheckForWinner();
 	if (winner != FACTION_NONE) {
@@ -215,7 +280,8 @@ static bool scorepenalty(obtype_t ttype, OBJECTS *ob, int score)
 	OBJECTS *obt;
 
 	obt = ob;
-	if (ttype == SHOT || ttype == BOMB || ttype == MISSILE ||
+	if (ttype == SHOT || ttype == BOMB || ttype == GRENADE ||
+	    ttype == MISSILE ||
 	    (ttype == PLANE &&
 	     (obt->ob_state == FLYING || obt->ob_state == WOUNDED ||
 	      (obt->ob_state == FALLING && obt->ob_hitcount == FALLCOUNT)) &&
@@ -237,6 +303,9 @@ static void crater(OBJECTS *ob)
 	xmax = xmin + 7;
 
 	for (x = xmin, i = 0; x <= xmax; ++x, ++i) {
+		if (!in_range(0, x, currgame->gm_max_x - 1)) {
+			continue;
+		}
 		ymax = ground[x];
 		ymin = ymax - crtdepth[i] + 1;
 		y = clamp_min(20, currgame->gm_ground[x] - 20);
@@ -302,6 +371,7 @@ static void swkill(OBJECTS *ob1, OBJECTS *ob2)
 	switch (ob->ob_type) {
 
 	case BOMB:
+	case GRENADE:
 	case MISSILE:
 		initexpl(ob, 0);
 		ob->ob_life = -1;
@@ -312,6 +382,10 @@ static void swkill(OBJECTS *ob1, OBJECTS *ob2)
 		return;
 
 	case SHOT:
+	case GROUND_SHOT:
+		if (obt == ob->ob_owner) {
+			return;
+		}
 		/* cr 2005-04-28: Don't stop the shot if it just
 		 * launched from its presumed originator */
 		if (!(obt && obt->ob_type == PLANE && IsYoungShot(ob))) {
@@ -353,11 +427,30 @@ static void swkill(OBJECTS *ob1, OBJECTS *ob2)
 		if (ob->ob_state != STANDING) {
 			return;
 		}
+		if (ttype == PLANE && obt &&
+		    obt->ob_faction == ob->ob_faction) {
+			return;
+		}
+		// The pilot walks past scenery; touching it must not destroy it.
+		if (ttype == WALKER || ttype == CAR) {
+			return;
+		}
+		// Mobile tanks pass scenery without crushing it.
+		if (ttype == TARGET) {
+			return;
+		}
+		if (ttype == GROUND_SHOT &&
+		    (playmode != PLAYMODE_BATTLEFIELD || !obt ||
+		     obt->ob_owner->ob_faction == ob->ob_faction)) {
+			return;
+		}
 		if (ttype == EXPLOSION || ttype == STARBURST) {
 			return;
 		}
 
-		if (ttype == SHOT) {
+		if (ttype == SHOT ||
+		    (playmode == PLAYMODE_BATTLEFIELD &&
+		     ttype == GROUND_SHOT)) {
 			ob->ob_hitcount += TARGHITCOUNT;
 			if (ob->ob_hitcount <= (TARGHITCOUNT * (gamenum + 1))) {
 				return;
@@ -381,6 +474,18 @@ static void swkill(OBJECTS *ob1, OBJECTS *ob2)
 	case PLANE:
 		state = ob->ob_state;
 
+		if (obt && obt->ob_faction == ob->ob_faction &&
+		    (ttype == WALKER || ttype == TARGET || ttype == CAR ||
+		     (playmode == PLAYMODE_BATTLEFIELD &&
+		      ttype == PLANE))) {
+			return;
+		}
+		if (ttype == WALKER && obt->ob_movef != move_walker) {
+			return;
+		}
+		if (ttype == GROUND_SHOT && obt->ob_owner == ob) {
+			return;
+		}
 		/* cr 2005-04-28: Avoid having planes hit themselves */
 		if (IsYoungShot(obt)) {
 			return;
@@ -435,10 +540,11 @@ static void swkill(OBJECTS *ob1, OBJECTS *ob2)
 			return;
 		}
 
-		if (ttype == SHOT || ttype == BIRD || ttype == OX ||
+		if (ttype == SHOT || ttype == GROUND_SHOT || ttype == BIRD ||
+		    ttype == OX ||
 		    ttype == FLOCK) {
 			if (ob == consoleplayer) {
-				if (ttype == SHOT) {
+				if (ttype == SHOT || ttype == GROUND_SHOT) {
 					swwindshot();
 				} else if (ttype == OX) {
 					swsplatox();
@@ -452,7 +558,8 @@ static void swkill(OBJECTS *ob1, OBJECTS *ob2)
 			// player sitting on the runway, that is a successful
 			// raid; otherwise, the damage would be repaired
 			// immediately.
-			if (conf_wounded && !ob->ob_athome) {
+			if (conf_wounded && ttype != GROUND_SHOT &&
+			    !ob->ob_athome) {
 				if (ttype == SHOT) {
 					ob->ob_flightscore.combatwound = true;
 				}
@@ -505,6 +612,78 @@ static void swkill(OBJECTS *ob1, OBJECTS *ob2)
 		scorepenalty(ttype, obt, 200);
 		ob->ob_state = FINISHED;
 		return;
+
+	case WALKER:
+		if (ob->ob_state != WALKER_ABANDONED) {
+			return;
+		}
+		if (ttype == PLANE && obt &&
+		    obt->ob_faction == ob->ob_faction) {
+			return;
+		}
+		if (ttype == GROUND_SHOT &&
+		    (obt->ob_owner == ob ||
+		     obt->ob_owner->ob_faction == ob->ob_faction)) {
+			return;
+		}
+		// Enemy infantry can be run down by a plane. The player's pilot
+		// is only vulnerable to an aircraft that is actually falling.
+		if (ttype == PLANE && obt && ob->ob_movef == move_walker &&
+		    obt->ob_state != FALLING) {
+			return;
+		}
+		if (ttype != SHOT && ttype != GROUND_SHOT && ttype != BOMB &&
+		    ttype != GRENADE && ttype != MISSILE &&
+		    ttype != STARBURST) {
+			if (ttype != PLANE || !obt) {
+				return;
+			}
+		}
+		if (ob->ob_athome) {
+			return;
+		}
+		ob->ob_hitcount--;
+		if (ob->ob_hitcount <= 0) {
+			ob->ob_hitcount = 0;
+			ob->ob_state = FINISHED;
+			initblood(ob);
+		}
+		ob->ob_dy = 2;
+		return;
+
+	case GRENADE_PICKUP:
+		if (ob->ob_state == STANDING && ttype == WALKER && obt &&
+		    obt->ob_movef == move_walker &&
+		    obt->ob_state == WALKER_ABANDONED) {
+			obt->ob_bombs += ob->ob_bombs;
+			ob->ob_state = FINISHED;
+			ob->ob_onmap = false;
+		}
+		return;
+
+	case CAR:
+	{
+		OBJECTS *vehicle;
+
+		// Cars pass through buildings without damaging them. Rifle
+		// bullets cannot penetrate the vehicle, but
+		// aircraft gunfire and a direct aircraft collision can.
+		if (ttype == TARGET || ttype == POWERUP ||
+		    ttype == GROUND_SHOT ||
+		    ttype == WALKER || ttype == CAR) {
+			return;
+		}
+		if (ttype == PLANE || ttype == SHOT) {
+			vehicle = eject_driver_and_destroy_car(ob);
+			initexpl(vehicle, 0);
+			TargetDestroyed(vehicle, ttype);
+		} else if (ttype == BOMB || ttype == GRENADE ||
+		           ttype == MISSILE) {
+			kill_car_driver(ob);
+		}
+		return;
+	}
+
 	default:
 		return;
 	}
@@ -549,10 +728,22 @@ void swcollsn(void)
 
 		if ((otype == PLANE && ob->ob_state != FINISHED &&
 		     ob->ob_state != WAITING &&
-		     ob->ob_y < (ground[ob->ob_x + 8] + 24)) ||
-		    ((otype == BOMB || otype == MISSILE) &&
-		     ob->ob_y < (ground[ob->ob_x + 4] + 12))) {
+		     ob->ob_y <
+		         (ground[clamp_range(0, ob->ob_x + 8,
+		                             currgame->gm_max_x - 1)] +
+		          24)) ||
+		    ((otype == BOMB || otype == GRENADE || otype == MISSILE) &&
+		     ob->ob_y <
+		         (ground[clamp_range(0, ob->ob_x + 4,
+		                             currgame->gm_max_x - 1)] +
+		          12))) {
 			tstcrash(ob);
+		}
+	}
+
+	for (ob = objtop; ob != NULL; ob = ob->ob_next) {
+		if (ob->ob_type == SHOT || ob->ob_type == GROUND_SHOT) {
+			QueueSweptWalkerHit(ob);
 		}
 	}
 
@@ -575,7 +766,9 @@ static void tstcrash(OBJECTS *obp)
 	int x, y;
 
 	for (x = 0; x < sym->w; ++x) {
-		y = obp->ob_y - ground[x + obp->ob_x];
+		int ground_x =
+		    clamp_range(0, x + obp->ob_x, currgame->gm_max_x - 1);
+		y = obp->ob_y - ground[ground_x];
 
 		// out of range?
 		if (y >= sym->h) {
@@ -645,7 +838,8 @@ void scorepln(OBJECTS *ob, obtype_t type)
 
 	scoretarg(ob, 50);
 
-	if (type == BOMB || type == SHOT || type == MISSILE || type == PLANE) {
+	if (type == BOMB || type == GRENADE || type == SHOT ||
+	    type == MISSILE || type == PLANE) {
 		int reverse;
 		OBJECTS *scobj = GetScoreObject(ob, &reverse);
 		if (!reverse) {

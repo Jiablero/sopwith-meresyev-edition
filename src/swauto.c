@@ -402,6 +402,15 @@ static void cruise(OBJECTS *ob)
 	int orgx;
 
 	courseadj = ((countmove & 0x001F) < 16) << 4;
+	if (playmode == PLAYMODE_BATTLEFIELD) {
+		int destination =
+		    ob->ob_faction == FACTION_PLAYER1
+		        ? currgame->gm_max_x - 320
+		        : 320;
+		aim(ob, destination, MAX_Y - 50 - (courseadj >> 1),
+		    NULL, false);
+		return;
+	}
 	orgx = ob->ob_original_ob->x;
 	aim(ob,
 	    courseadj + clamp_range(currgame->gm_max_x / 3, orgx,
@@ -424,7 +433,8 @@ void swauto(OBJECTS *ob)
 {
 	if (ob->ob_target != NULL) {
 		attack(ob, ob->ob_target);
-	} else if (!ob->ob_athome) {
+	} else if (!ob->ob_athome ||
+	           playmode == PLAYMODE_BATTLEFIELD) {
 		cruise(ob);
 	}
 

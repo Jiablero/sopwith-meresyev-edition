@@ -108,6 +108,9 @@ extern void Vid_XorPixel(int x, int y, int clr);
 // draw a symbol
 
 extern void Vid_DispSymbol(int x, int y, sopsym_t *symbol, faction_t f);
+extern void Vid_DispSymbolFlipped(int x, int y, sopsym_t *symbol,
+                                  faction_t f);
+extern void Vid_DispSymbolOpaque(int x, int y, sopsym_t *symbol, faction_t f);
 extern int Vid_FuselageColor(faction_t f);
 
 // clear screen

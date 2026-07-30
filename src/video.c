@@ -92,7 +92,6 @@ int Vid_GetGameKeys(void)
 		keysdown[KEY_STARBURST] = 0;
 		c |= K_STARBURST;
 	}
-
 	// clear bits in key array
 	for (i = 0; i < NUM_KEYS; ++i) {
 		keysdown[i] &= ~KEYDOWN_WAS_PRESSED;
@@ -236,6 +235,71 @@ void Vid_DispSymbol(int x, int y, sopsym_t *symbol, faction_t clr)
 
 			if (i) {
 				*dst2 ^= color_mapping[i];
+			}
+		}
+		src += symbol->w;
+		dst += vid_pitch;
+	}
+}
+
+void Vid_DispSymbolFlipped(int x, int y, sopsym_t *symbol, faction_t clr)
+{
+	int left_skip = x < 0 ? -x : 0;
+	uint8_t *dst =
+	    vid_vram + (SCR_HGHT - 1 - y) * vid_pitch + x + left_skip;
+	int x1, y1;
+	int w = symbol->w, h = symbol->h;
+	const uint8_t *color_mapping;
+
+	if (x + w > SCR_WDTH) {
+		w -= x + w - SCR_WDTH;
+	}
+	if (h > y + 1) {
+		h = y + 1;
+	}
+	assert(clr < arrlen(color_mappings));
+	color_mapping = color_mappings[clr];
+	for (y1 = 0; y1 < h; ++y1) {
+		uint8_t *dst2 = dst;
+		for (x1 = left_skip; x1 < w; ++x1, ++dst2) {
+			int i = symbol->data[y1 * symbol->w +
+			                     (symbol->w - 1 - x1)];
+			if (i) {
+				*dst2 ^= color_mapping[i];
+			}
+		}
+		dst += vid_pitch;
+	}
+}
+
+void Vid_DispSymbolOpaque(int x, int y, sopsym_t *symbol, faction_t clr)
+{
+	int left_skip = x < 0 ? -x : 0;
+	uint8_t *dst =
+	    vid_vram + (SCR_HGHT - 1 - y) * vid_pitch + x + left_skip;
+	const uint8_t *src = symbol->data;
+	int x1, y1;
+	int w = symbol->w, h = symbol->h;
+	const uint8_t *color_mapping;
+
+	if (x + w > SCR_WDTH) {
+		w -= x + w - SCR_WDTH;
+	}
+	if (h > y + 1) {
+		h = y + 1;
+	}
+
+	assert(clr < arrlen(color_mappings));
+	color_mapping = color_mappings[clr];
+	for (y1 = 0; y1 < h; ++y1) {
+		uint8_t *dst2 = dst;
+		const uint8_t *src2 = src + left_skip;
+
+		for (x1 = left_skip; x1 < w; ++x1, ++dst2) {
+			int i = *src2++;
+
+			if (i) {
+				*dst2 = color_mapping[i];
 			}
 		}
 		src += symbol->w;

@@ -1259,6 +1259,43 @@ static const char *swribbonsym[] = {
     "- - # # # - -   \n", /* MMWWWMM : PREVALOUR */
 };
 
+// Walker (abandoned pilot on foot):
+static const char *swwalksym[] = {
+    "      # #       \n"
+    "    # # # #     \n"
+    "      * *       \n"
+    "    * * * *     \n"
+    "      * *       \n"
+    "      * *       \n"
+    "    * * * *     \n"
+    "    *     *     \n",
+    "      # #       \n"
+    "    # # # #     \n"
+    "      * *       \n"
+    "    * * * *     \n"
+    "      * *       \n"
+    "    * * *       \n"
+    "  * *   * *     \n"
+    "  *       * *   \n",
+    "      # #       \n"
+    "    # # # #     \n"
+    "      * *       \n"
+    "    * * * *     \n"
+    "      * *       \n"
+    "      * * *     \n"
+    "    * *   * *   \n"
+    "    *       *   \n",
+};
+
+static const char *swgrenadesym[] = {
+    "    #       \n"
+    "    # #     \n"
+    "  * * *     \n"
+    "* * * * *   \n"
+    "* * * * *   \n"
+    "  * * *     \n",
+};
+
 static void Rotate(int *x, int *y, int w, int h, int rotations, bool mirror)
 {
 	int i, tmp;
@@ -1393,6 +1430,8 @@ symset_t symbol_ribbon[6];                            // swribbonsym
 symset_t symbol_balloon[6];                           // swballoonsym
 symset_t symbol_powerups[NUM_POWERUP_TYPES];          // swpowerupsym
 symset_t symbol_powerup_collected[NUM_POWERUP_TYPES]; // swpowercollsym
+symset_t symbol_walker[3];                            // swwalksym
+symset_t symbol_grenade[1];                           // swgrenadesym
 
 // special symbol for single pixel (bullets etc)
 
@@ -1431,6 +1470,8 @@ void GenerateSymbols(void)
 	SYMSETS_FROM_TEXT(swballoonsym, symbol_balloon);
 	SYMSETS_FROM_TEXT(swpowerupsym, symbol_powerups);
 	SYMSETS_FROM_TEXT(swpowercollsym, symbol_powerup_collected);
+	SYMSETS_FROM_TEXT(swwalksym, symbol_walker);
+	SYMSETS_FROM_TEXT(swgrenadesym, symbol_grenade);
 }
 
 //

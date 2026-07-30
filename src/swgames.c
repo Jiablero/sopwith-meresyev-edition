@@ -18,6 +18,7 @@
 
 #include "sw.h"
 #include "swgames.h"
+#include "swmain.h"
 #include "swsound.h"
 #include "swtitle.h"
 #include "video.h"
@@ -244,6 +245,7 @@ static original_ob_t original_targets[] = {
     {TARGET, 1210, 2, 0, 0, FACTION_PLAYER1},
     {TARGET, 1240, 0, 0, 0, FACTION_PLAYER1},
     {PLANE, 1270, 0, 901, 1835, FACTION_PLAYER1},
+    {TARGET, 1300, TARGET_TRUCK, 0, 0, FACTION_PLAYER1},
     // Extra planes for multiplayer
     {PLANE, 1330, 0, 901, 1835, FACTION_PLAYER5},
     {PLANE, 1360, 0, 901, 1835, FACTION_PLAYER6},
@@ -306,6 +308,223 @@ static const char *faction_names[] = {
 
 GAMES custom_level;
 bool have_custom_level;
+GAMES random_level;
+bool use_random_level;
+
+void GenerateRandomLevel(void)
+{
+	const int width = 3200;
+	const int enemy_targets =
+	    playmode == PLAYMODE_NOVICE ? 14 : 24;
+	const int enemy_planes =
+	    playmode == PLAYMODE_NOVICE ? 3 : 5;
+	static const target_type_t random_target_types[] = {
+	    TARGET_HANGAR,      TARGET_FACTORY,    TARGET_OIL_TANK,
+	    TARGET_TANK,        TARGET_TRUCK,      TARGET_TANKER_TRUCK,
+	    TARGET_FLAG,        TARGET_TENT,       TARGET_RADIO_TOWER,
+	    TARGET_WATER_TOWER,
+	};
+	int i, x, j, segment_start, segment_end;
+	int start_height = 42, end_height;
+	int plane_x[enemy_planes];
+	original_ob_t *objects;
+
+	free(random_level.gm_ground);
+	free(random_level.gm_objects);
+	memset(&random_level, 0, sizeof(random_level));
+
+	random_level.gm_ground =
+	    checked_calloc(width, sizeof(*random_level.gm_ground));
+	segment_start = 0;
+	while (segment_start < width) {
+		int segment_length = 70 + rand() % 190;
+		bool plateau = (rand() % 5) == 0;
+
+		segment_end = clamp_max(width, segment_start + segment_length);
+		end_height = plateau ? start_height : 24 + rand() % 96;
+		for (x = segment_start; x < segment_end; ++x) {
+			int height;
+			if (plateau) {
+				height = start_height;
+			} else {
+				height = start_height +
+				         ((end_height - start_height) *
+				          (x - segment_start)) /
+				             (segment_end - segment_start);
+				height += ((x / 9) % 3) - 1;
+			}
+			random_level.gm_ground[x] =
+			    clamp_range(22, height, 125);
+		}
+		start_height = end_height;
+		segment_start = segment_end;
+	}
+	// Flat, safe runway around the player's base, with long transition
+	// slopes so it does not cut a vertical wall through the terrain.
+	start_height = random_level.gm_ground[80];
+	end_height = random_level.gm_ground[620];
+	for (x = 80; x < 180; ++x) {
+		random_level.gm_ground[x] =
+		    start_height + ((38 - start_height) * (x - 80)) / 100;
+	}
+	for (x = 180; x < 520; ++x) {
+		random_level.gm_ground[x] = 38;
+	}
+	for (x = 520; x < 620; ++x) {
+		random_level.gm_ground[x] =
+		    38 + ((end_height - 38) * (x - 520)) / 100;
+	}
+
+	random_level.gm_num_objects =
+	    4 + enemy_targets + enemy_planes * 2;
+	objects = checked_calloc(random_level.gm_num_objects, sizeof(*objects));
+	random_level.gm_objects = objects;
+
+	objects[0] = (original_ob_t){
+	    TARGET, 220, TARGET_HANGAR, 0, 0, FACTION_PLAYER1};
+	objects[1] = (original_ob_t){
+	    PLANE, 300, 0, 160, 600, FACTION_PLAYER1};
+	objects[2] = (original_ob_t){
+	    TARGET, 390, TARGET_TENT, 0, 0, FACTION_PLAYER1};
+	objects[3] = (original_ob_t){
+	    TARGET, 455, TARGET_TRUCK, 0, 0, FACTION_PLAYER1};
+
+	for (i = 0; i < enemy_planes; ++i) {
+		plane_x[i] =
+		    850 + i * ((width - 1100) / (enemy_planes - 1));
+	}
+
+	for (i = 0; i < enemy_targets; ++i) {
+		bool valid;
+		do {
+			valid = true;
+			x = 650 + rand() % (width - 750);
+			for (j = 0; j < enemy_planes; ++j) {
+				if (abs(x - plane_x[j]) < 130) {
+					valid = false;
+					break;
+				}
+			}
+		} while (!valid);
+		objects[4 + i] = (original_ob_t){
+		    TARGET, x,
+		    random_target_types[rand() % arrlen(random_target_types)],
+		    0, 0, FACTION_PLAYER3};
+	}
+	for (i = 0; i < enemy_planes; ++i) {
+		int plane_index = 4 + enemy_targets + i;
+		int hangar_index = 4 + enemy_targets + enemy_planes + i;
+		int base_height, left_height, right_height;
+
+		x = plane_x[i];
+		base_height = random_level.gm_ground[x];
+		left_height = random_level.gm_ground[x - 100];
+		right_height = random_level.gm_ground[x + 120];
+		for (j = x - 100; j < x - 60; ++j) {
+			random_level.gm_ground[j] =
+			    left_height +
+			    ((base_height - left_height) * (j - (x - 100))) / 40;
+		}
+		for (j = x - 60; j < x + 80; ++j) {
+			random_level.gm_ground[j] = base_height;
+		}
+		for (j = x + 80; j < x + 120; ++j) {
+			random_level.gm_ground[j] =
+			    base_height +
+			    ((right_height - base_height) * (j - (x + 80))) / 40;
+		}
+		objects[plane_index] = (original_ob_t){
+		    PLANE, x, i & 1, clamp_min(600, x - 350),
+		    clamp_max(width - 1, x + 350), FACTION_PLAYER3};
+		objects[hangar_index] = (original_ob_t){
+		    TARGET, x - 38, TARGET_HANGAR, 0, 0, FACTION_PLAYER3};
+	}
+
+	random_level.gm_rseed = (unsigned int)rand();
+	random_level.gm_max_x = width;
+	use_random_level = true;
+}
+
+void GenerateBattlefieldLevel(void)
+{
+	const int width = 3200;
+	const int buildings_per_side = 10;
+	const int num_planes = 4;
+	static const target_type_t building_types[] = {
+	    TARGET_FACTORY, TARGET_OIL_TANK, TARGET_TENT,
+	    TARGET_RADIO_TOWER, TARGET_WATER_TOWER,
+	    TARGET_CUSTOM1, TARGET_CUSTOM2, TARGET_CUSTOM3,
+	};
+	original_ob_t *objects;
+	int i, x;
+	int left_outer, left_inner, right_inner, right_outer;
+
+	// Reuse the varied random terrain, then replace its single-player
+	// object layout with the symmetric Battlefield setup.
+	GenerateRandomLevel();
+	free(random_level.gm_objects);
+	random_level.gm_num_objects =
+	    buildings_per_side * 2 + num_planes;
+	objects = checked_calloc(random_level.gm_num_objects, sizeof(*objects));
+	random_level.gm_objects = objects;
+
+	// Safe runways at both reinforcement edges, joined to the random
+	// terrain by gentle slopes.
+	left_outer = random_level.gm_ground[60];
+	left_inner = random_level.gm_ground[540];
+	right_inner = random_level.gm_ground[width - 541];
+	right_outer = random_level.gm_ground[width - 61];
+	for (x = 60; x < 120; ++x) {
+		random_level.gm_ground[x] =
+		    left_outer + ((38 - left_outer) * (x - 60)) / 60;
+	}
+	for (x = 120; x < 480; ++x) {
+		random_level.gm_ground[x] = 38;
+	}
+	for (x = 480; x < 540; ++x) {
+		random_level.gm_ground[x] =
+		    38 + ((left_inner - 38) * (x - 480)) / 60;
+	}
+	for (x = width - 540; x < width - 480; ++x) {
+		random_level.gm_ground[x] =
+		    right_inner +
+		    ((38 - right_inner) * (x - (width - 540))) / 60;
+	}
+	for (x = width - 480; x < width - 120; ++x) {
+		random_level.gm_ground[x] = 38;
+	}
+	for (x = width - 120; x < width - 60; ++x) {
+		random_level.gm_ground[x] =
+		    38 + ((right_outer - 38) * (x - (width - 120))) / 60;
+	}
+
+	objects[0] = (original_ob_t){
+	    PLANE, 180, 0, 80, width / 2, FACTION_PLAYER1};
+	objects[1] = (original_ob_t){
+	    PLANE, 250, 0, 80, width / 2, FACTION_PLAYER1};
+	objects[2] = (original_ob_t){
+	    PLANE, width - 180, 1, width / 2, width - 80,
+	    FACTION_PLAYER2};
+	objects[3] = (original_ob_t){
+	    PLANE, width - 250, 1, width / 2, width - 80,
+	    FACTION_PLAYER2};
+
+	for (i = 0; i < buildings_per_side; ++i) {
+		int left_x = 360 + i * 115;
+		int right_x = width - 392 - i * 115;
+		target_type_t type =
+		    i == 0 ? TARGET_HANGAR
+		           : building_types[rand() % arrlen(building_types)];
+
+		objects[num_planes + i] = (original_ob_t){
+		    TARGET, left_x, type, 0, 0, FACTION_PLAYER1};
+		objects[num_planes + buildings_per_side + i] =
+		    (original_ob_t){
+		        TARGET, right_x, type, 0, 0, FACTION_PLAYER2};
+	}
+	random_level.gm_rseed = (unsigned int)rand();
+	use_random_level = true;
+}
 
 #define cl custom_level
 

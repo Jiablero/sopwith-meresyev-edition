@@ -440,7 +440,8 @@ static void Vid_SetMode(void)
 
 	if (window == NULL) {
 		window =
-		    SDL_CreateWindow(PACKAGE_STRING, SDL_WINDOWPOS_CENTERED,
+		    SDL_CreateWindow("Sopwith - Meresyev Edition",
+		                     SDL_WINDOWPOS_CENTERED,
 		                     SDL_WINDOWPOS_CENTERED, w, h, flags);
 	} else {
 		SDL_SetWindowFullscreen(window, flags);

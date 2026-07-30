@@ -331,10 +331,13 @@ void initcomp(OBJECTS *obp, const original_ob_t *orig_ob)
 		ob->ob_movef = movecomp;
 		// TODO: Allow multiple computer-controlled planes belonging
 		// to different factions.
-		ob->ob_faction = FACTION_PLAYER2;
+		ob->ob_faction = playmode == PLAYMODE_BATTLEFIELD
+		                     ? ob->ob_original_ob->faction
+		                     : FACTION_PLAYER2;
 		ob->ob_clr = ob->ob_faction;
 	}
-	if (playmode == PLAYMODE_SINGLE || playmode == PLAYMODE_NOVICE) {
+	if (!use_random_level &&
+	    (playmode == PLAYMODE_SINGLE || playmode == PLAYMODE_NOVICE)) {
 		ob->ob_state = FINISHED;
 		ob->ob_onmap = false;
 		deletex(ob);
@@ -683,10 +686,64 @@ static OBJECTS *inittarget(const original_ob_t *orig_ob)
 	ob->ob_orient = orig_ob->orient;
 	AddPlayerTarget(ob, orig_ob);
 	ob->ob_clr = ob->ob_faction;
-	ob->ob_movef = movetarg;
+	ob->ob_movef =
+	    orig_ob->orient == TARGET_TANK ? move_tank : movetarg;
 	ob->ob_onmap = true;
 
 	return ob;
+}
+
+static void initsoldiers(OBJECTS *target)
+{
+	OBJECTS *ob;
+	int i, count, direction, spawn_x;
+
+	if (target->ob_faction == FACTION_NONE) {
+		return;
+	}
+
+	count = 1 + ((target->ob_x + target->ob_orient) % 3);
+	direction = target->ob_x > currgame->gm_max_x / 2 ? -1 : 1;
+	for (i = 0; i < count; ++i) {
+		ob = allocobj();
+		ob->ob_type = WALKER;
+		ob->ob_state = WALKER_ABANDONED;
+		ob->ob_movef = target->ob_faction == FACTION_PLAYER1
+		                   ? move_ally_soldier
+		                   : move_enemy_soldier;
+		ob->ob_symbol = &symbol_walker[0].sym[0];
+		ob->ob_faction = target->ob_faction;
+		ob->ob_clr = target->ob_faction;
+		ob->ob_hitcount = 1;
+		ob->ob_bombs = target->ob_faction == FACTION_PLAYER1 ? 0 : 2;
+		ob->ob_target = target;
+		if (direction > 0) {
+			spawn_x = target->ob_x + target->ob_symbol->w +
+			          2 + i * (ob->ob_symbol->w + 2);
+		} else {
+			spawn_x = target->ob_x - 2 -
+			          (i + 1) * (ob->ob_symbol->w + 2);
+		}
+		ob->ob_x =
+		    clamp_range(0, spawn_x,
+		                currgame->gm_max_x - ob->ob_symbol->w);
+		ob->ob_y =
+		    clamp_max(ground[ob->ob_x] + ob->ob_symbol->h - 1,
+		              SCR_HGHT - 1);
+		ob->ob_dx = ob->ob_dy = ob->ob_lx = ob->ob_ly = ob->ob_ldx =
+		    ob->ob_ldy = ob->ob_speed = ob->ob_accel = 0;
+		ob->ob_orient = 1;
+		ob->ob_angle = ANGLES / 2;
+		ob->ob_life = MAXFUEL;
+		ob->ob_bdelay = 10 + i * 7;
+		ob->ob_owner = NULL;
+		ob->ob_firing = ob->ob_mfiring = NULL;
+		ob->ob_sound = NULL;
+		ob->ob_soundf = NULL;
+		ob->ob_onmap = true;
+		ob->ob_athome = ob->ob_home = false;
+		insertx(ob, target);
+	}
 }
 
 // powerup item:
@@ -853,6 +910,32 @@ void initexpl(OBJECTS *obo, int small)
 		}
 
 		insertx(ob, obo);
+	}
+}
+
+void initblood(OBJECTS *source)
+{
+	OBJECTS *ob;
+	int i;
+
+	for (i = -1; i <= 1; ++i) {
+		ob = allocobj();
+		ob->ob_type = BLOOD;
+		ob->ob_state = FALLING;
+		ob->ob_x = source->ob_x + source->ob_symbol->w / 2;
+		ob->ob_y = source->ob_y - source->ob_symbol->h / 2;
+		ob->ob_dx = i;
+		ob->ob_dy = 1 + (i == 0);
+		ob->ob_lx = ob->ob_ly = ob->ob_ldx = ob->ob_ldy = 0;
+		ob->ob_life = 7 + i;
+		ob->ob_owner = source;
+		ob->ob_clr = FACTION_PLAYER2;
+		ob->ob_symbol = &symbol_pixel;
+		ob->ob_sound = NULL;
+		ob->ob_soundf = NULL;
+		ob->ob_movef = move_blood;
+		ob->ob_onmap = false;
+		insertx(ob, source);
 	}
 }
 
@@ -1036,6 +1119,10 @@ static void inittargets(void)
 		if (ob != NULL) {
 			ob->ob_original_ob = orig_ob;
 			insertx(ob, &topobj);
+			if (ob->ob_type == TARGET &&
+			    playmode != PLAYMODE_BATTLEFIELD) {
+				initsoldiers(ob);
+			}
 		}
 	}
 }
@@ -1071,7 +1158,9 @@ void swinitlevel(void)
 	original_ob_t *player1_ob, *player2_ob;
 	int i;
 
-	if (have_custom_level) {
+	if (use_random_level) {
+		currgame = &random_level;
+	} else if (have_custom_level) {
 		currgame = &custom_level;
 	} else {
 		currgame = &original_level;

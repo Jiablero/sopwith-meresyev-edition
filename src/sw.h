@@ -102,6 +102,9 @@ typedef enum {
 #define STALLCOUNT   6  /* Moves between stalling plane adj*/
 #define TARGHITCOUNT 10 /* Target hit count before explod'n*/
 
+#define WALKER_SPEED 1 /* Walker movement speed */
+#define WALKER_MAXHITS 1 /* A hit kills the walker and costs one life */
+
 #define SCR_WDTH 320 /* Screen Width */
 #define SCR_HGHT 200 /* Screen Height */
 
@@ -121,7 +124,8 @@ typedef enum {
 	PLAYMODE_SINGLE,
 	PLAYMODE_COMPUTER,
 	PLAYMODE_ASYNCH,
-	PLAYMODE_NOVICE
+	PLAYMODE_NOVICE,
+	PLAYMODE_BATTLEFIELD
 } playmode_t;
 
 #define MAXROUNDS   200  /* Maximum number of rounds of shot */
@@ -162,6 +166,7 @@ typedef enum { /* Player states */
 	REBUILDING,
 	WOUNDED,
 	WOUNDSTALL,
+	WALKER_ABANDONED,
 
 	FINISHED = 91,
 } obstate_t;
@@ -187,6 +192,12 @@ typedef enum {
 	STARBURST,
 	BALLOON,
 	POWERUP,
+	WALKER,
+	GROUND_SHOT,
+	GRENADE,
+	GRENADE_PICKUP,
+	BLOOD,
+	CAR,
 	DUMMYTYPE = 99,
 } obtype_t;
 
@@ -347,6 +358,7 @@ typedef struct obj { /* Object list */
 	// That generated values is saved here as ob_orig_y, and we must
 	// look in two different locations to get the two coordinates.
 	int ob_orig_y;
+	int ob_control_delay;
 
 	bool ob_bombing;
 	bool ob_drwflg;

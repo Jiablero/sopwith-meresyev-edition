@@ -26,6 +26,7 @@ extern void initbomb(OBJECTS *obop);
 extern void initmiss(OBJECTS *obop);
 extern void initburst(OBJECTS *obop);
 extern void initexpl(OBJECTS *obop, int small);
+extern void initblood(OBJECTS *obop);
 extern void initsmok(OBJECTS *obop);
 extern void initbird(OBJECTS *obop, int i);
 

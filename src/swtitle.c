@@ -83,6 +83,8 @@ static struct title_element default_elements[] = {
     {TITLE_GROUND, {.ground = {original_ground + 367, 600}}},
     {TITLE_TEXT, {.text = {2, 20, 2, "SDL", TEXT_ALIGN_CENTER}}},
     {TITLE_TEXT, {.text = {3, 20, 4, "S O P W I T H", TEXT_ALIGN_CENTER}}},
+    {TITLE_TEXT,
+     {.text = {1, 20, 5, "MERESYEV EDITION", TEXT_ALIGN_CENTER}}},
     {TITLE_TEXT, {.text = {3, 20, 6, MAGIC_VERSION, TEXT_ALIGN_CENTER}}},
     {TITLE_TEXT, {.text = {3, 0, 9, "(c) 1984, 1985, 1987"}}},
     {TITLE_TEXT, {.text = {1, 21, 9, "BMB"}}},
@@ -374,19 +376,45 @@ static const struct menu netgame_menu = {
 
 static enum menu_action StartNovice(const struct menuitem *item)
 {
+	use_random_level = false;
 	playmode = PLAYMODE_NOVICE;
 	return MENU_ACTION_RETURN;
 }
 
 static enum menu_action StartExpert(const struct menuitem *item)
 {
+	use_random_level = false;
 	playmode = PLAYMODE_SINGLE;
+	return MENU_ACTION_RETURN;
+}
+
+static enum menu_action StartRandomNovice(const struct menuitem *item)
+{
+	playmode = PLAYMODE_NOVICE;
+	GenerateRandomLevel();
+	return MENU_ACTION_RETURN;
+}
+
+static enum menu_action StartRandomExpert(const struct menuitem *item)
+{
+	playmode = PLAYMODE_SINGLE;
+	GenerateRandomLevel();
+	return MENU_ACTION_RETURN;
+}
+
+static enum menu_action StartBattlefield(const struct menuitem *item)
+{
+	playmode = PLAYMODE_BATTLEFIELD;
+	GenerateBattlefieldLevel();
 	return MENU_ACTION_RETURN;
 }
 
 static const struct menuitem single_player_menu_items[] = {
     {'N', "novice player", StartNovice},
     {'E', "expert player", StartExpert},
+    {'R', "random map - novice", StartRandomNovice},
+    {'M', "random map - expert", StartRandomExpert},
+    {'B', "battlefield", StartBattlefield},
     {0, NULL},
 };
 
@@ -398,6 +426,7 @@ static const struct menu single_player_menu = {
 
 static enum menu_action StartVsComputer(const struct menuitem *item)
 {
+	use_random_level = false;
 	playmode = PLAYMODE_COMPUTER;
 	return MENU_ACTION_RETURN;
 }
