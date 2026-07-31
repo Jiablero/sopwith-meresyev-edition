@@ -25,20 +25,56 @@
 static int ComputeValour(OBJECTS *ob);
 static void tstcrash(OBJECTS *obp);
 
-static OBJECTS *killed[MAX_OBJS * 2], *killer[MAX_OBJS * 2];
+#define MAX_COLLISION_EVENTS 4096
+
+static OBJECTS *killed[MAX_COLLISION_EVENTS];
+static OBJECTS *killer[MAX_COLLISION_EVENTS];
 static int killptr;
 
 static bool CollisionAlreadyQueued(OBJECTS *ob1, OBJECTS *ob2)
 {
 	int i;
 
-	for (i = 0; i + 1 < killptr; i += 2) {
+	for (i = 0; i < killptr; ++i) {
 		if ((killed[i] == ob1 && killer[i] == ob2) ||
 		    (killed[i] == ob2 && killer[i] == ob1)) {
 			return true;
 		}
 	}
 	return false;
+}
+
+static bool CollisionCanMatter(OBJECTS *ob1, OBJECTS *ob2)
+{
+	if (ob1->ob_type == EXPLOSION || ob2->ob_type == EXPLOSION) {
+		return false;
+	}
+	if (ob1->ob_type == WALKER && ob2->ob_type == WALKER) {
+		return false;
+	}
+	if ((ob1->ob_type == WALKER && ob2->ob_type == CAR) ||
+	    (ob2->ob_type == WALKER && ob1->ob_type == CAR) ||
+	    (ob1->ob_type == CAR && ob2->ob_type == CAR)) {
+		return false;
+	}
+	if (ob1->ob_type == TARGET && ob2->ob_type == TARGET) {
+		return false;
+	}
+	if ((ob1->ob_type == TARGET &&
+	     (ob2->ob_type == WALKER || ob2->ob_type == CAR)) ||
+	    (ob2->ob_type == TARGET &&
+	     (ob1->ob_type == WALKER || ob1->ob_type == CAR))) {
+		return false;
+	}
+	if (ob1->ob_type == STARBURST || ob2->ob_type == STARBURST) {
+		OBJECTS *other =
+		    ob1->ob_type == STARBURST ? ob2 : ob1;
+		return other->ob_type == WALKER ||
+		       other->ob_type == MISSILE ||
+		       other->ob_type == BOMB ||
+		       other->ob_type == GRENADE;
+	}
+	return true;
 }
 
 static void QueueSweptWalkerHit(OBJECTS *shot)
@@ -74,7 +110,7 @@ static void QueueSweptWalkerHit(OBJECTS *shot)
 	}
 
 	if (best != NULL && !CollisionAlreadyQueued(shot, best) &&
-	    killptr < 2 * MAX_OBJS - 1) {
+	    killptr < MAX_COLLISION_EVENTS - 1) {
 		killed[killptr] = shot;
 		killer[killptr++] = best;
 		killed[killptr] = best;
@@ -713,8 +749,9 @@ void swcollsn(void)
 
 			if (obp->ob_y >= ymin &&
 			    (obp->ob_y - obp->ob_symbol->h + 1) <= ymax &&
+			    CollisionCanMatter(ob, obp) &&
 			    CollisionTest(ob, obp) &&
-			    killptr < 2 * MAX_OBJS - 1) {
+			    killptr < MAX_COLLISION_EVENTS - 1) {
 				killed[killptr] = ob;
 				killer[killptr] = obp;
 				++killptr;
@@ -726,7 +763,10 @@ void swcollsn(void)
 
 		otype = ob->ob_type;
 
-		if ((otype == PLANE && ob->ob_state != FINISHED &&
+		if ((otype == PLANE &&
+		     !(playmode == PLAYMODE_BATTLEFIELD &&
+		       ob->ob_athome && ob->ob_control_delay > 0) &&
+		     ob->ob_state != FINISHED &&
 		     ob->ob_state != WAITING &&
 		     ob->ob_y <
 		         (ground[clamp_range(0, ob->ob_x + 8,
@@ -779,7 +819,7 @@ static void tstcrash(OBJECTS *obp)
 		if (y < 0 || sym->data[y * sym->w + x]) {
 
 			// collision!
-			if (killptr < 2 * MAX_OBJS) {
+			if (killptr < MAX_COLLISION_EVENTS) {
 				killed[killptr] = obp;
 				killer[killptr] = NULL;
 				++killptr;

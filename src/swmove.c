@@ -18,6 +18,7 @@
 #include "swauto.h"
 #include "swcollsn.h"
 #include "swend.h"
+#include "swgames.h"
 #include "swinit.h"
 #include "swmain.h"
 #include "swmove.h"
@@ -249,6 +250,19 @@ bool moveplyr(OBJECTS *ob)
 	if (ob->ob_state == CRASHED && ob->ob_hitcount <= 0) {
 
 		OBJECTS *walker;
+
+		if (vanilla_mode) {
+			++ob->ob_crashcnt;
+			if (ob->ob_crashcnt >= maxcrash) {
+				loser(ob);
+			} else {
+				clear_owned_ordnance(ob);
+				initplyr(ob, ob->ob_original_ob);
+				ob->ob_control_delay = 18;
+				initdisp(true);
+			}
+			return true;
+		}
 
 		if (endstat != WINNER && ob->ob_life <= QUIT) {
 			if (!endstat) {
@@ -699,7 +713,7 @@ static bool movepln(OBJECTS *ob)
 	case WOUNDED:
 		stalled = ob->ob_y >= MAX_Y;
 		if (stalled) {
-			if (playmode == PLAYMODE_NOVICE) {
+			if (NoviceMode()) {
 				ob->ob_angle = (3 * ANGLES / 4);
 				stalled = false;
 			} else {
@@ -751,7 +765,7 @@ static bool movepln(OBJECTS *ob)
 
 		if (!(countmove & 0x0003)) {
 			if (!stalled && nspeed < gminspeed &&
-			    playmode != PLAYMODE_NOVICE) {
+			    !NoviceMode()) {
 				--nspeed;
 				update = true;
 			} else {
@@ -776,7 +790,7 @@ static bool movepln(OBJECTS *ob)
 				}
 
 			} else if (nspeed <= 0 && !stalled) {
-				if (playmode == PLAYMODE_NOVICE) {
+				if (NoviceMode()) {
 					nspeed = 1;
 				} else {
 					stallpln(ob);
@@ -1550,8 +1564,15 @@ bool move_blood(OBJECTS *obp)
 }
 
 #define BATTLEFIELD_WAVE_TICKS   (60 * FPS)
-#define BATTLEFIELD_REPAIR_TICKS (20 * FPS)
-#define BATTLEFIELD_ARMY_LIMIT   36
+#define BATTLEFIELD_REPAIR_TICKS (40 * FPS)
+#define BATTLEFIELD_ARMY_LIMIT_EXPERT 36
+#define BATTLEFIELD_ARMY_LIMIT_NOVICE 24
+
+static int battlefield_army_limit(void)
+{
+	return battlefield_novice ? BATTLEFIELD_ARMY_LIMIT_NOVICE
+	                          : BATTLEFIELD_ARMY_LIMIT_EXPERT;
+}
 
 static int battlefield_unit_count(faction_t faction)
 {
@@ -1579,12 +1600,13 @@ static void spawn_battlefield_group(faction_t faction, int spawn_x,
 	OBJECTS *ob;
 	int i, count, direction;
 
-	if (*unit_count >= BATTLEFIELD_ARMY_LIMIT || source == NULL) {
+	if (*unit_count >= battlefield_army_limit() || source == NULL) {
 		return;
 	}
 	direction = faction == FACTION_PLAYER1 ? 1 : -1;
 	count = (rand() & 1) ? 3 : 1;
-	for (i = 0; i < count && *unit_count < BATTLEFIELD_ARMY_LIMIT; ++i) {
+	for (i = 0;
+	     i < count && *unit_count < battlefield_army_limit(); ++i) {
 		ob = allocobj();
 		ob->ob_original_ob = source->ob_original_ob;
 		ob->ob_faction = faction;

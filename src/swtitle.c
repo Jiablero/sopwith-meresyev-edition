@@ -377,6 +377,7 @@ static const struct menu netgame_menu = {
 static enum menu_action StartNovice(const struct menuitem *item)
 {
 	use_random_level = false;
+	vanilla_mode = true;
 	playmode = PLAYMODE_NOVICE;
 	return MENU_ACTION_RETURN;
 }
@@ -384,12 +385,14 @@ static enum menu_action StartNovice(const struct menuitem *item)
 static enum menu_action StartExpert(const struct menuitem *item)
 {
 	use_random_level = false;
+	vanilla_mode = true;
 	playmode = PLAYMODE_SINGLE;
 	return MENU_ACTION_RETURN;
 }
 
 static enum menu_action StartRandomNovice(const struct menuitem *item)
 {
+	vanilla_mode = false;
 	playmode = PLAYMODE_NOVICE;
 	GenerateRandomLevel();
 	return MENU_ACTION_RETURN;
@@ -397,24 +400,37 @@ static enum menu_action StartRandomNovice(const struct menuitem *item)
 
 static enum menu_action StartRandomExpert(const struct menuitem *item)
 {
+	vanilla_mode = false;
 	playmode = PLAYMODE_SINGLE;
 	GenerateRandomLevel();
 	return MENU_ACTION_RETURN;
 }
 
-static enum menu_action StartBattlefield(const struct menuitem *item)
+static enum menu_action StartBattlefieldNovice(const struct menuitem *item)
 {
+	vanilla_mode = false;
+	battlefield_novice = true;
+	playmode = PLAYMODE_BATTLEFIELD;
+	GenerateBattlefieldLevel();
+	return MENU_ACTION_RETURN;
+}
+
+static enum menu_action StartBattlefieldExpert(const struct menuitem *item)
+{
+	vanilla_mode = false;
+	battlefield_novice = false;
 	playmode = PLAYMODE_BATTLEFIELD;
 	GenerateBattlefieldLevel();
 	return MENU_ACTION_RETURN;
 }
 
 static const struct menuitem single_player_menu_items[] = {
-    {'N', "novice player", StartNovice},
-    {'E', "expert player", StartExpert},
+    {'N', "vanilla - novice", StartNovice},
+    {'E', "vanilla - expert", StartExpert},
     {'R', "random map - novice", StartRandomNovice},
     {'M', "random map - expert", StartRandomExpert},
-    {'B', "battlefield", StartBattlefield},
+    {'B', "battlefield - novice", StartBattlefieldNovice},
+    {'F', "battlefield - expert", StartBattlefieldExpert},
     {0, NULL},
 };
 
@@ -427,6 +443,7 @@ static const struct menu single_player_menu = {
 static enum menu_action StartVsComputer(const struct menuitem *item)
 {
 	use_random_level = false;
+	vanilla_mode = true;
 	playmode = PLAYMODE_COMPUTER;
 	return MENU_ACTION_RETURN;
 }

@@ -310,14 +310,23 @@ GAMES custom_level;
 bool have_custom_level;
 GAMES random_level;
 bool use_random_level;
+bool battlefield_novice;
+bool vanilla_mode;
+
+bool NoviceMode(void)
+{
+	return playmode == PLAYMODE_NOVICE ||
+	       (playmode == PLAYMODE_BATTLEFIELD &&
+	        battlefield_novice);
+}
 
 void GenerateRandomLevel(void)
 {
 	const int width = 3200;
 	const int enemy_targets =
-	    playmode == PLAYMODE_NOVICE ? 14 : 24;
+	    NoviceMode() ? 14 : 24;
 	const int enemy_planes =
-	    playmode == PLAYMODE_NOVICE ? 3 : 5;
+	    NoviceMode() ? 3 : 5;
 	static const target_type_t random_target_types[] = {
 	    TARGET_HANGAR,      TARGET_FACTORY,    TARGET_OIL_TANK,
 	    TARGET_TANK,        TARGET_TRUCK,      TARGET_TANKER_TRUCK,
@@ -451,9 +460,9 @@ void GenerateBattlefieldLevel(void)
 	const int buildings_per_side = 10;
 	const int num_planes = 4;
 	static const target_type_t building_types[] = {
-	    TARGET_FACTORY, TARGET_OIL_TANK, TARGET_TENT,
-	    TARGET_RADIO_TOWER, TARGET_WATER_TOWER,
-	    TARGET_CUSTOM1, TARGET_CUSTOM2, TARGET_CUSTOM3,
+	    TARGET_HANGAR, TARGET_FACTORY, TARGET_OIL_TANK,
+	    TARGET_TRUCK, TARGET_TANKER_TRUCK, TARGET_FLAG,
+	    TARGET_TENT, TARGET_RADIO_TOWER, TARGET_WATER_TOWER,
 	};
 	original_ob_t *objects;
 	int i, x;

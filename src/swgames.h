@@ -20,9 +20,12 @@ extern GAMES custom_level;
 extern bool have_custom_level;
 extern GAMES random_level;
 extern bool use_random_level;
+extern bool battlefield_novice;
+extern bool vanilla_mode;
 
 void LoadCustomLevel(const char *filename);
 void GenerateRandomLevel(void);
 void GenerateBattlefieldLevel(void);
+bool NoviceMode(void);
 
 #endif

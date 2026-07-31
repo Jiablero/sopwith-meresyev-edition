@@ -420,7 +420,7 @@ void initshot(OBJECTS *obo, OBJECTS *targ)
 		return;
 	}
 
-	if (playmode != PLAYMODE_NOVICE) {
+	if (!NoviceMode()) {
 		--obo->ob_rounds;
 	}
 
@@ -486,7 +486,7 @@ void initbomb(OBJECTS *obo)
 		return;
 	}
 
-	if (playmode != PLAYMODE_NOVICE) {
+	if (!NoviceMode()) {
 		--obo->ob_bombs;
 	}
 
@@ -532,7 +532,7 @@ void initmiss(OBJECTS *obo)
 		return;
 	}
 
-	if (playmode != PLAYMODE_NOVICE) {
+	if (!NoviceMode()) {
 		--obo->ob_missiles;
 	}
 
@@ -578,7 +578,7 @@ void initburst(OBJECTS *obo)
 
 	ob->ob_bsdelay = 5;
 
-	if (playmode != PLAYMODE_NOVICE) {
+	if (!NoviceMode()) {
 		--obo->ob_bursts;
 	}
 
@@ -687,7 +687,9 @@ static OBJECTS *inittarget(const original_ob_t *orig_ob)
 	AddPlayerTarget(ob, orig_ob);
 	ob->ob_clr = ob->ob_faction;
 	ob->ob_movef =
-	    orig_ob->orient == TARGET_TANK ? move_tank : movetarg;
+	    orig_ob->orient == TARGET_TANK && !vanilla_mode
+	        ? move_tank
+	        : movetarg;
 	ob->ob_onmap = true;
 
 	return ob;
@@ -969,7 +971,7 @@ static OBJECTS *initflock(const original_ob_t *orig_ob)
 	OBJECTS *ob;
 	int j;
 
-	if (playmode == PLAYMODE_NOVICE || !conf_animals) {
+	if (NoviceMode() || !conf_animals) {
 		return NULL;
 	}
 
@@ -1063,7 +1065,7 @@ static OBJECTS *initox(const original_ob_t *orig_ob)
 {
 	OBJECTS *ob;
 
-	if (playmode == PLAYMODE_NOVICE || !conf_animals) {
+	if (NoviceMode() || !conf_animals) {
 		return NULL;
 	}
 
@@ -1120,7 +1122,8 @@ static void inittargets(void)
 			ob->ob_original_ob = orig_ob;
 			insertx(ob, &topobj);
 			if (ob->ob_type == TARGET &&
-			    playmode != PLAYMODE_BATTLEFIELD) {
+			    playmode != PLAYMODE_BATTLEFIELD &&
+			    !vanilla_mode) {
 				initsoldiers(ob);
 			}
 		}
@@ -1237,6 +1240,11 @@ void swinitlevel(void)
 		if (orig_planes[i] != player1_ob &&
 		    orig_planes[i] != player2_ob) {
 			initcomp(NULL, orig_planes[i]);
+		}
+	}
+	if (playmode == PLAYMODE_BATTLEFIELD) {
+		for (i = 0; i < num_planes; ++i) {
+			planes[i]->ob_control_delay = FPS;
 		}
 	}
 
@@ -1399,6 +1407,7 @@ void swinit(int argc, char *argv[])
 	         : c ? PLAYMODE_COMPUTER
 	         : a ? PLAYMODE_ASYNCH
 	             : PLAYMODE_UNSET;
+	vanilla_mode = n || s || c;
 }
 
 //
