@@ -1,4 +1,4 @@
-AC_INIT([SDL Sopwith], [2.9.0], [fraggle@gmail.com], [sdl-sopwith])
+AC_INIT([SDL Sopwith], [1.0.1], [fraggle@gmail.com], [sdl-sopwith])
 AC_CONFIG_AUX_DIR(autotools)
 
 VERSION=$CONFIG_VERSION
@@ -98,4 +98,3 @@ src/resource.rc
 src/sdl/Makefile
 ])
 AC_OUTPUT
-

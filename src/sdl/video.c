@@ -26,6 +26,10 @@
 
 #define INPUT_BUFFER_LEN 32
 
+#ifdef CALCULINUX_PICOCALC
+#define PICOCALC_DISPLAY_SIZE 480
+#endif
+
 void Vid_ControllerButtonDown(SDL_ControllerButtonEvent *event);
 void Vid_ControllerButtonUp(SDL_ControllerButtonEvent *event);
 void Vid_ControllerAdded(SDL_ControllerDeviceEvent *event);
@@ -199,6 +203,13 @@ void Vid_Update(void)
 	if (!initted) {
 		Vid_Init();
 	}
+
+#ifdef CALCULINUX_PICOCALC
+	// The black sky blends into the letterbox on PicoCalc's square panel.
+	// Mark the upper edge of the playable area so the flight ceiling remains
+	// visible without changing collision behavior.
+	memset(vid_vram, 3, SCR_WDTH);
+#endif
 
 	SDL_UnlockSurface(screenbuf);
 
@@ -398,6 +409,11 @@ static void CreateUpscaledTexture(int force)
 
 static void GetWindowSize(int *w, int *h)
 {
+#ifdef CALCULINUX_PICOCALC
+	*w = PICOCALC_DISPLAY_SIZE;
+	*h = PICOCALC_DISPLAY_SIZE;
+	return;
+#else
 	SDL_DisplayMode mode;
 	int factor;
 
@@ -414,6 +430,7 @@ static void GetWindowSize(int *w, int *h)
 
 	*w *= factor;
 	*h *= factor;
+#endif
 }
 
 static void Vid_SetMode(void)
@@ -432,11 +449,17 @@ static void Vid_SetMode(void)
 
 	GetWindowSize(&w, &h);
 
+#ifdef CALCULINUX_PICOCALC
+	// PicoCalc has a fixed 480x480 panel. The renderer's 320x200 logical
+	// size preserves the game's aspect ratio and centers a 480x300 image.
+	flags = SDL_WINDOW_BORDERLESS;
+#else
 	flags = SDL_WINDOW_RESIZABLE;
 	flags |= SDL_WINDOW_ALLOW_HIGHDPI;
 	if (vid_fullscreen) {
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 	}
+#endif
 
 	if (window == NULL) {
 		window =

@@ -14,6 +14,7 @@ DOC_FILES=            \
         FAQ.md        \
         NEWS.md       \
         README.md     \
+        README-UPSTREAM.md \
         PHILOSOPHY.md
 
 missionsdir = $(docdir)/examples
